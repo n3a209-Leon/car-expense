@@ -113,12 +113,15 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .quickchip .em{font-size:22px;display:block;margin-bottom:4px;}
 
 /* ---- Nav ---- */
-.tabbar{display:flex;background:var(--panel);border-top:1px solid var(--line);
-  padding:8px 4px calc(env(safe-area-inset-bottom) + 8px);position:sticky;bottom:0;}
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-dim);
-  font-size:10px;padding:4px 0;}
+.tabbar{display:flex;flex-direction:column;background:var(--panel);border-top:1px solid var(--line);
+  padding:10px 4px calc(env(safe-area-inset-bottom) + 6px);position:sticky;bottom:0;}
+.tabbar-row{display:flex;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-dim);
+  font-size:13px;font-weight:600;padding:5px 0;}
 .tab.active{color:var(--gauge-amber);}
-.tab .ic{font-size:19px;}
+.tab .ic{font-size:26px;}
+.tabbar-brand{text-align:center;font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:.28em;color:var(--ink-dim);margin-top:8px;opacity:.6;}
 
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 78px);width:56px;height:56px;
   border-radius:50%;background:var(--gauge-amber);color:#1a1408;font-size:28px;display:flex;
@@ -291,7 +294,7 @@ const DEFAULT_META = {
     fuelTax:      {lastDate:'2026-06-26', intervalMonths:6},
     inspection:   {lastDate:'2026-07-03', intervalMonths:12},
     maintenance:  {lastDate:'2026-02-27', lastMileage:118767, intervalMonths:12, intervalKm:8000},
-    tireRotation: {lastDate:'2026-01-26', lastMileage:116120, intervalKm:6000}
+    tireRotation: {lastDate:'2026-01-26', lastMileage:116120, intervalKm:10000}
   }
 };
 
@@ -969,11 +972,14 @@ function App(){
     {tab!=='settings' && <button className="fab" onClick={()=>{ setEditingRecord(null); setAddPrefill(null); setShowAdd(true); }}>+</button>}
 
     <div className="tabbar">
-      <TabBtn icon="🏠" label="首頁" active={tab==='dashboard'} onClick={()=>setTab('dashboard')}/>
-      <TabBtn icon="📜" label="紀錄" active={tab==='timeline'} onClick={()=>setTab('timeline')}/>
-      <TabBtn icon="⚠️" label="事件" active={tab==='issues'} onClick={()=>setTab('issues')}/>
-      <TabBtn icon="📊" label="統計" active={tab==='stats'} onClick={()=>setTab('stats')}/>
-      <TabBtn icon="⚙️" label="設定" active={tab==='settings'} onClick={()=>setTab('settings')}/>
+      <div className="tabbar-row">
+        <TabBtn icon="🏠" label="首頁" active={tab==='dashboard'} onClick={()=>setTab('dashboard')}/>
+        <TabBtn icon="📜" label="紀錄" active={tab==='timeline'} onClick={()=>setTab('timeline')}/>
+        <TabBtn icon="⚠️" label="事件" active={tab==='issues'} onClick={()=>setTab('issues')}/>
+        <TabBtn icon="📊" label="統計" active={tab==='stats'} onClick={()=>setTab('stats')}/>
+        <TabBtn icon="⚙️" label="設定" active={tab==='settings'} onClick={()=>setTab('settings')}/>
+      </div>
+      <div className="tabbar-brand">墨哥 OS</div>
     </div>
 
     {showAdd && <AddModal initial={addInitial} onSave={handleSaveRecord} onDelete={handleDeleteRecord}
