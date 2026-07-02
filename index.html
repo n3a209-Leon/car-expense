@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="墨哥帳本">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>墨哥帳本｜Moko Ledger</title>
 <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
@@ -143,6 +145,24 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 a{color:var(--gauge-blue);}
 .logo-splash{font-family:var(--mono);font-weight:800;font-size:15px;letter-spacing:.3em;color:var(--gauge-amber);}
+
+.splash{position:fixed;inset:0;z-index:100;background:#000;overflow:hidden;
+  display:flex;align-items:flex-end;justify-content:center;}
+.splash-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transform:scale(1.18);opacity:1;transition:transform 1.6s cubic-bezier(.16,.8,.3,1), opacity 1.1s ease .5s;}
+.splash.zoomout .splash-img{transform:scale(1);}
+.splash.fadeout{opacity:0;transition:opacity .6s ease;pointer-events:none;}
+.splash-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,24,29,.15) 0%,rgba(20,24,29,.55) 65%,rgba(20,24,29,.94) 100%);}
+.splash-brand{position:relative;z-index:2;text-align:center;padding-bottom:14vh;
+  opacity:0;transform:translateY(10px);transition:opacity .8s ease .5s, transform .8s ease .5s;}
+.splash.zoomout .splash-brand{opacity:1;transform:translateY(0);}
+.splash-brand .logo-splash{font-size:20px;}
+.splash-brand .tag{font-size:12px;color:var(--ink-dim);margin-top:8px;letter-spacing:.08em;}
+
+.gsi-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#fff;color:#3c4043;border-radius:12px;padding:13px;font-size:15px;font-weight:600;
+  border:1px solid var(--line);cursor:pointer;font-family:inherit;}
+.gsi-btn svg{width:18px;height:18px;}
 </style>
 </head>
 <body>
@@ -182,6 +202,18 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 try{ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+
+async function gSignIn(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try{
+    return await auth.signInWithPopup(provider);
+  }catch(e){
+    if(e.code==='auth/popup-blocked' || e.code==='auth/popup-closed-by-user'){
+      return auth.signInWithRedirect(provider);
+    }
+    throw e;
+  }
+}
 
 /* ============ STORAGE HELPERS ============ */
 function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
@@ -341,37 +373,35 @@ function RecordRow({rec,onClick}){
 
 /* ============ LOGIN ============ */
 function LoginScreen(){
-  const [email,setEmail] = useState(safeGet('moko:lastEmail')||'');
-  const [pw,setPw] = useState('');
-  const [mode,setMode] = useState('signin');
   const [err,setErr] = useState('');
   const [busy,setBusy] = useState(false);
   async function submit(){
-    if(!email || !pw){ setErr('請輸入帳號密碼'); return; }
     setBusy(true); setErr('');
-    try{
-      if(mode==='signin') await auth.signInWithEmailAndPassword(email,pw);
-      else await auth.createUserWithEmailAndPassword(email,pw);
-      safeSet('moko:lastEmail', email);
-    }catch(e){ setErr(e.message||'登入失敗'); }
+    try{ await gSignIn(); }
+    catch(e){ setErr(e.message||'登入失敗'); }
     setBusy(false);
   }
   return <div className="center-screen">
     <div className="logo-splash">MOKO LEDGER</div>
-    <div style={{fontSize:13,color:'var(--ink-dim)',marginTop:8,marginBottom:28}}>墨哥支出帳本</div>
+    <div style={{fontSize:13,color:'var(--ink-dim)',marginTop:8,marginBottom:36}}>墨哥支出帳本</div>
     <div style={{width:'100%',maxWidth:320}}>
-      <div className="field"><label>帳號 Email</label>
-        <input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoCapitalize="none" autoCorrect="off"/></div>
-      <div className="field"><label>密碼</label>
-        <input value={pw} onChange={e=>setPw(e.target.value)} type="password"/></div>
-      {err && <div style={{color:'var(--gauge-red)',fontSize:12,marginBottom:12}}>{err}</div>}
-      <button className="btn btn-primary" style={{width:'100%'}} onClick={submit} disabled={busy}>
-        {busy? '處理中…' : (mode==='signin'? '登入':'建立帳號')}
+      {err && <div style={{color:'var(--gauge-red)',fontSize:12,marginBottom:12,textAlign:'center'}}>{err}</div>}
+      <button className="gsi-btn" onClick={submit} disabled={busy}>
+        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.6 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.4 18.9 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.3-2.1 14-5.5l-6.5-5.4C29.5 34.9 26.9 36 24 36c-5.3 0-9.8-3.4-11.4-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.5 5.4C41.4 36.1 44 30.6 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+        {busy? '登入中…' : '使用 Google 帳號登入'}
       </button>
-      <div style={{textAlign:'center',marginTop:14,fontSize:12,color:'var(--ink-dim)'}}
-        onClick={()=>setMode(mode==='signin'?'signup':'signin')}>
-        {mode==='signin'? '第一次使用？建立帳號' : '已有帳號？登入'}
-      </div>
+    </div>
+  </div>;
+}
+
+/* ============ SPLASH ============ */
+function SplashScreen({phase}){
+  return <div className={"splash "+phase}>
+    <img className="splash-img" src="splash.jpg" alt=""/>
+    <div className="splash-shade"></div>
+    <div className="splash-brand">
+      <div className="logo-splash">MOKO LEDGER</div>
+      <div className="tag">墨哥支出帳本</div>
     </div>
   </div>;
 }
@@ -673,12 +703,25 @@ function App(){
   const [tab,setTab] = useState('dashboard');
   const [online,setOnline] = useState(navigator.onLine);
   const [syncState,setSyncState] = useState('ok');
+  const [splashPhase,setSplashPhase] = useState('');
+  const [showSplash,setShowSplash] = useState(true);
 
   const [showAdd,setShowAdd] = useState(false);
   const [editingRecord,setEditingRecord] = useState(null);
   const [addPrefill,setAddPrefill] = useState(null);
   const [showIssueAdd,setShowIssueAdd] = useState(false);
   const [followupTarget,setFollowupTarget] = useState(null);
+
+  useEffect(()=>{
+    const t1 = setTimeout(()=>setSplashPhase('zoomout'), 60);
+    const t2 = setTimeout(()=>setSplashPhase('zoomout fadeout'), 1700);
+    const t3 = setTimeout(()=>setShowSplash(false), 2300);
+    return ()=>{ clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  },[]);
+
+  useEffect(()=>{
+    auth.getRedirectResult().catch(e=>console.error('redirect result error',e));
+  },[]);
 
   useEffect(()=>{
     const onOnline=()=>{ setOnline(true); if(user) pullFirestore(user.uid); };
@@ -846,12 +889,13 @@ function App(){
     setFollowupTarget(null);
   }
 
-  if(authLoading) return <div className="center-screen"><div className="logo-splash">MOKO LEDGER</div></div>;
-  if(!user) return <LoginScreen/>;
+  if(authLoading) return <>{showSplash && <SplashScreen phase={splashPhase}/>}</>;
+  if(!user) return <>{showSplash && <SplashScreen phase={splashPhase}/>}<LoginScreen/></>;
 
   const addInitial = editingRecord || addPrefill;
 
   return <>
+    {showSplash && <SplashScreen phase={splashPhase}/>}
     <div className="screen">
       {tab==='dashboard' && <Dashboard meta={meta} records={records} issues={issues} online={online} syncState={syncState}
         onQuickAdd={cat=>{ setEditingRecord(null); setAddPrefill({category:cat}); setShowAdd(true); }}
