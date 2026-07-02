@@ -77,7 +77,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 /* ---- Timeline / list ---- */
 .rec-item{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);
-  border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+  border-radius:14px;padding:12px 14px;margin-bottom:8px;transition:transform .08s ease, opacity .08s ease;}
+.rec-item:active{transform:scale(0.98);opacity:.7;}
 .rec-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
   font-size:18px;flex-shrink:0;}
 .rec-mid{flex:1;min-width:0;}
@@ -91,7 +92,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 /* ---- Buttons / inputs ---- */
 .btn{border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;text-align:center;
-  cursor:pointer;font-family:inherit;}
+  cursor:pointer;font-family:inherit;transition:transform .08s ease, opacity .08s ease;}
+.btn:active{transform:scale(0.96);opacity:.75;}
 .btn-primary{background:var(--gauge-amber);color:#1a1408;}
 .btn-ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);}
 .btn-danger{background:rgba(226,87,76,.14);color:var(--gauge-red);border:1px solid rgba(226,87,76,.3);}
@@ -104,13 +106,16 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
 .cat-btn{aspect-ratio:1;border-radius:14px;border:1.5px solid var(--line);background:var(--panel);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;
-  color:var(--ink-dim);cursor:pointer;}
+  color:var(--ink-dim);cursor:pointer;transition:transform .08s ease, opacity .08s ease;}
+.cat-btn:active{transform:scale(0.94);opacity:.75;}
 .cat-btn .em{font-size:20px;}
 .cat-btn.active{border-color:var(--gauge-amber);background:rgba(232,163,61,.1);color:var(--ink);}
 
 .quickchip-row{display:flex;gap:8px;margin-bottom:16px;}
 .quickchip{flex:1;padding:14px 8px;border-radius:14px;background:var(--panel);border:1px solid var(--line);
-  text-align:center;font-size:13px;font-weight:600;color:var(--ink-dim);}
+  text-align:center;font-size:13px;font-weight:600;color:var(--ink-dim);cursor:pointer;
+  transition:transform .08s ease, opacity .08s ease;}
+.quickchip:active{transform:scale(0.94);opacity:.75;}
 .quickchip .em{font-size:22px;display:block;margin-bottom:4px;}
 
 /* ---- Nav ---- */
@@ -118,7 +123,8 @@ input,textarea{-webkit-user-select:text;user-select:text;}
   padding:10px 4px calc(env(safe-area-inset-bottom) + 6px);position:sticky;bottom:0;}
 .tabbar-row{display:flex;}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-dim);
-  font-size:13px;font-weight:600;padding:5px 0;}
+  font-size:13px;font-weight:600;padding:5px 0;transition:transform .08s ease, opacity .08s ease;}
+.tab:active{transform:scale(0.92);opacity:.7;}
 .tab.active{color:var(--gauge-amber);}
 .tab .ic{font-size:26px;}
 .tabbar-brand{text-align:center;font-family:var(--mono);font-size:9px;font-weight:700;
@@ -126,7 +132,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 78px);width:56px;height:56px;
   border-radius:50%;background:var(--gauge-amber);color:#1a1408;font-size:28px;display:flex;
-  align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(232,163,61,.35);z-index:20;border:none;}
+  align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(232,163,61,.35);z-index:20;border:none;
+  transition:transform .08s ease, opacity .08s ease;}
+.fab:active{transform:scale(0.90);opacity:.85;}
 
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-end;}
 .modal-sheet{background:var(--bg);width:100%;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;
@@ -135,8 +143,12 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .modal-head .modal-title{margin-bottom:0;}
 .modal-close{width:30px;height:30px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line);
-  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ink-dim);flex-shrink:0;}
-.check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--ink-dim);}
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ink-dim);flex-shrink:0;
+  cursor:pointer;transition:transform .08s ease, opacity .08s ease;}
+.modal-close:active{transform:scale(0.88);opacity:.7;}
+.check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--ink-dim);
+  cursor:pointer;transition:opacity .08s ease;}
+.check-row:active{opacity:.65;}
 .checkbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);background:var(--panel-2);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:var(--gauge-amber);margin-top:1px;}
 .checkbox.checked{border-color:var(--gauge-amber);background:rgba(232,163,61,.12);}
@@ -150,7 +162,9 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 
 .issue-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;}
 .issue-title{font-weight:700;font-size:14.5px;}
-.issue-status{font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:700;}
+.issue-status{font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:700;cursor:pointer;
+  transition:transform .08s ease, opacity .08s ease;}
+.issue-status:active{transform:scale(0.92);opacity:.7;}
 .issue-status.open{background:rgba(226,87,76,.14);color:var(--gauge-red);}
 .issue-status.resolved{background:rgba(62,207,142,.14);color:var(--gauge-teal);}
 .followup{border-left:2px solid var(--line);padding-left:10px;margin-top:8px;font-size:12.5px;color:var(--ink-dim);}
@@ -173,8 +187,12 @@ a{color:var(--gauge-blue);}
 
 .gsi-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
   background:#fff;color:#3c4043;border-radius:12px;padding:13px;font-size:15px;font-weight:600;
-  border:1px solid var(--line);cursor:pointer;font-family:inherit;}
+  border:1px solid var(--line);cursor:pointer;font-family:inherit;
+  transition:transform .08s ease, opacity .08s ease;}
+.gsi-btn:active{transform:scale(0.97);opacity:.8;}
 .gsi-btn svg{width:18px;height:18px;}
+.filter-chip{transition:transform .08s ease, opacity .08s ease;}
+.filter-chip:active{transform:scale(0.94);opacity:.7;}
 </style>
 </head>
 <body>
@@ -361,7 +379,7 @@ function TabBtn({icon,label,active,onClick}){
   </div>;
 }
 function FilterChip({active,label,onClick}){
-  return <div onClick={onClick} style={{
+  return <div className="filter-chip" onClick={onClick} style={{
     flex:'0 0 auto',padding:'8px 13px',borderRadius:20,fontSize:12.5,whiteSpace:'nowrap',
     background: active? 'rgba(232,163,61,.16)':'var(--panel)',
     border:'1px solid '+(active?'var(--gauge-amber)':'var(--line)'),
@@ -1088,6 +1106,11 @@ function App(){
     {followupTarget && <FollowupModal issue={followupTarget} onSave={data=>handleAddFollowup(followupTarget,data)} onClose={()=>setFollowupTarget(null)}/>}
   </>;
 }
+
+// iOS Safari 預設不會在 div/非 button 元素上觸發 :active 樣式，
+// 除非頁面上有註冊 touchstart 監聽器。這行讓上面所有按下去的
+// scale/opacity 回饋在 iPhone 上真的會出現。
+document.addEventListener('touchstart', function(){}, {passive:true});
 
 ReactDOM.render(<App/>, document.getElementById('root'));
 
