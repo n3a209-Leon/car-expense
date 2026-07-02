@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#14181d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="墨哥帳本">
+<link rel="manifest" href="manifest.json">
+<title>墨哥帳本｜Moko Ledger</title>
+<script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<style>
+:root{
+  --bg:#14181d;
+  --panel:#1c2129;
+  --panel-2:#232a34;
+  --line:#2c3440;
+  --ink:#e8ecf1;
+  --ink-dim:#8b96a5;
+  --gauge-amber:#e8a33d;
+  --gauge-red:#e2574c;
+  --gauge-teal:#3ecf8e;
+  --gauge-blue:#4f8ef7;
+  --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'PingFang TC','Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  height:100%;overscroll-behavior:none;-webkit-user-select:none;user-select:none;}
+#root{height:100%;display:flex;flex-direction:column;}
+input,textarea{-webkit-user-select:text;user-select:text;}
+::-webkit-scrollbar{display:none;}
+
+.screen{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(env(safe-area-inset-top) + 14px) 14px 90px;}
+.center-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
+
+/* ---- Odometer header ---- */
+.odo-wrap{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+  border-radius:18px;padding:18px 20px;margin-bottom:16px;position:relative;overflow:hidden;}
+.odo-wrap::after{content:'';position:absolute;top:-40%;right:-20%;width:180px;height:180px;
+  background:radial-gradient(circle,rgba(232,163,61,.10),transparent 70%);}
+.odo-label{font-size:11px;letter-spacing:.14em;color:var(--ink-dim);text-transform:uppercase;}
+.odo-value{font-family:var(--mono);font-size:34px;font-weight:700;letter-spacing:.02em;margin-top:2px;
+  display:flex;align-items:baseline;gap:6px;}
+.odo-value small{font-size:14px;color:var(--ink-dim);font-weight:400;}
+.odo-sub{display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--ink-dim);}
+.odo-sub b{color:var(--ink);font-weight:600;}
+.sync-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
+.sync-ok{background:var(--gauge-teal);}
+.sync-pending{background:var(--gauge-amber);animation:pulse 1.4s infinite;}
+.sync-off{background:var(--ink-dim);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---- Reminder cards ---- */
+.section-title{font-size:13px;font-weight:700;color:var(--ink-dim);letter-spacing:.06em;
+  margin:20px 0 10px;text-transform:uppercase;}
+.reminder-row{display:flex;overflow-x:auto;gap:10px;padding-bottom:4px;margin:0 -14px;padding-left:14px;padding-right:14px;}
+.reminder-card{flex:0 0 auto;min-width:150px;background:var(--panel);border-radius:14px;padding:12px 14px;
+  border:1px solid var(--line);border-left:3px solid var(--ink-dim);}
+.reminder-card.urgent{border-left-color:var(--gauge-red);background:linear-gradient(180deg,rgba(226,87,76,.09),var(--panel));}
+.reminder-card.soon{border-left-color:var(--gauge-amber);}
+.reminder-card.ok{border-left-color:var(--gauge-teal);}
+.reminder-name{font-size:12.5px;color:var(--ink-dim);}
+.reminder-value{font-size:18px;font-weight:700;margin-top:3px;}
+.reminder-value.urgent{color:var(--gauge-red);}
+.reminder-value.soon{color:var(--gauge-amber);}
+
+/* ---- Timeline / list ---- */
+.rec-item{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+.rec-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;flex-shrink:0;}
+.rec-mid{flex:1;min-width:0;}
+.rec-cat{font-size:14px;font-weight:600;}
+.rec-note{font-size:12px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rec-meta{font-size:11px;color:var(--ink-dim);margin-top:2px;}
+.rec-amt{font-family:var(--mono);font-size:15px;font-weight:700;flex-shrink:0;}
+.rec-amt.zero{color:var(--ink-dim);font-weight:400;}
+.rec-date{font-size:10px;color:var(--ink-dim);margin-top:2px;text-align:right;}
+.day-divider{font-size:11px;color:var(--ink-dim);margin:14px 0 6px;padding-left:2px;}
+
+/* ---- Buttons / inputs ---- */
+.btn{border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;text-align:center;
+  cursor:pointer;font-family:inherit;}
+.btn-primary{background:var(--gauge-amber);color:#1a1408;}
+.btn-ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);}
+.btn-danger{background:rgba(226,87,76,.14);color:var(--gauge-red);border:1px solid rgba(226,87,76,.3);}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;color:var(--ink-dim);margin-bottom:6px;font-weight:600;}
+.field input,.field textarea,.field select{width:100%;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:10px;padding:12px;color:var(--ink);font-size:16px;font-family:inherit;}
+.field textarea{resize:none;min-height:60px;}
+
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.cat-btn{aspect-ratio:1;border-radius:14px;border:1.5px solid var(--line);background:var(--panel);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;
+  color:var(--ink-dim);cursor:pointer;}
+.cat-btn .em{font-size:20px;}
+.cat-btn.active{border-color:var(--gauge-amber);background:rgba(232,163,61,.1);color:var(--ink);}
+
+.quickchip-row{display:flex;gap:8px;margin-bottom:16px;}
+.quickchip{flex:1;padding:14px 8px;border-radius:14px;background:var(--panel);border:1px solid var(--line);
+  text-align:center;font-size:13px;font-weight:600;color:var(--ink-dim);}
+.quickchip .em{font-size:22px;display:block;margin-bottom:4px;}
+
+/* ---- Nav ---- */
+.tabbar{display:flex;background:var(--panel);border-top:1px solid var(--line);
+  padding:8px 4px calc(env(safe-area-inset-bottom) + 8px);position:sticky;bottom:0;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-dim);
+  font-size:10px;padding:4px 0;}
+.tab.active{color:var(--gauge-amber);}
+.tab .ic{font-size:19px;}
+
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 78px);width:56px;height:56px;
+  border-radius:50%;background:var(--gauge-amber);color:#1a1408;font-size:28px;display:flex;
+  align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(232,163,61,.35);z-index:20;border:none;}
+
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-end;}
+.modal-sheet{background:var(--bg);width:100%;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;
+  padding:18px 16px calc(env(safe-area-inset-bottom) + 20px);}
+.modal-handle{width:36px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:16px;}
+
+.empty{text-align:center;color:var(--ink-dim);padding:40px 20px;font-size:13px;}
+.stat-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;}
+.stat-row{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);}
+.stat-row:last-child{border-bottom:none;}
+.stat-row b{font-family:var(--mono);}
+
+.issue-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;}
+.issue-title{font-weight:700;font-size:14.5px;}
+.issue-status{font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:700;}
+.issue-status.open{background:rgba(226,87,76,.14);color:var(--gauge-red);}
+.issue-status.resolved{background:rgba(62,207,142,.14);color:var(--gauge-teal);}
+.followup{border-left:2px solid var(--line);padding-left:10px;margin-top:8px;font-size:12.5px;color:var(--ink-dim);}
+
+a{color:var(--gauge-blue);}
+.logo-splash{font-family:var(--mono);font-weight:800;font-size:15px;letter-spacing:.3em;color:var(--gauge-amber);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef} = React;
+
+/* ============ CATEGORIES ============ */
+const CATEGORIES = [
+  {id:'fuel', name:'加油', icon:'⛽', color:'#4f8ef7'},
+  {id:'maintenance', name:'保養', icon:'🔧', color:'#e8a33d'},
+  {id:'repair', name:'維修', icon:'🛠️', color:'#e2574c'},
+  {id:'insurance', name:'保險', icon:'🛡️', color:'#8b6ff7'},
+  {id:'tax_license', name:'牌照稅', icon:'📋', color:'#4fc3f7'},
+  {id:'tax_fuel', name:'燃料稅', icon:'🧾', color:'#3ecf8e'},
+  {id:'inspection', name:'驗車', icon:'✅', color:'#8bc34a'},
+  {id:'tire', name:'調胎/輪胎', icon:'🛞', color:'#a1785a'},
+  {id:'carwash', name:'洗車鍍膜', icon:'🚿', color:'#03a9f4'},
+  {id:'etag', name:'etag儲值', icon:'💳', color:'#ff9800'},
+  {id:'accessory', name:'配件雜項', icon:'🧩', color:'#c07ae0'},
+  {id:'other', name:'其他', icon:'📌', color:'#8b96a5'},
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+
+/* ============ FIREBASE ============ */
+// 沿用 Venus OS 同一個 Firebase 專案 (attendance-pwa-9fa73)。
+// 請把下面 firebaseConfig 換成你 fresh2.html 裡實際使用的那一組設定值。
+const firebaseConfig = {
+  apiKey: "AIzaSyAqgA9pYvOduWypEE5kxVNlq9fEfrEMV0c",
+  authDomain: "attendance-pwa-9fa73.firebaseapp.com",
+  projectId: "attendance-pwa-9fa73",
+  storageBucket: "attendance-pwa-9fa73.firebasestorage.app",
+  messagingSenderId: "231697999145",
+  appId: "1:231697999145:web:b92cba42082eb9cc574338"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+try{ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+
+/* ============ STORAGE HELPERS ============ */
+function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+function safeSet(key,val){ try{ localStorage.setItem(key,val); return true; }catch(e){ return false; } }
+
+const DB_NAME='moko-ledger', DB_VER=1;
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = (e)=>{
+      const idb = e.target.result;
+      if(!idb.objectStoreNames.contains('records')) idb.createObjectStore('records',{keyPath:'id'});
+      if(!idb.objectStoreNames.contains('issues')) idb.createObjectStore('issues',{keyPath:'id'});
+      if(!idb.objectStoreNames.contains('meta')) idb.createObjectStore('meta',{keyPath:'key'});
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbGetAll(store){
+  try{
+    const idb = await openDB();
+    return await new Promise((resolve,reject)=>{
+      const tx = idb.transaction(store,'readonly');
+      const r = tx.objectStore(store).getAll();
+      r.onsuccess = ()=>resolve(r.result||[]);
+      r.onerror = ()=>reject(r.error);
+    });
+  }catch(e){ return []; }
+}
+async function idbPut(store,obj){
+  try{
+    const idb = await openDB();
+    await new Promise((resolve,reject)=>{
+      const tx = idb.transaction(store,'readwrite');
+      tx.objectStore(store).put(obj);
+      tx.oncomplete = ()=>resolve();
+      tx.onerror = ()=>reject(tx.error);
+    });
+  }catch(e){}
+}
+
+function uid(){ return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmtNum(n){ if(n==null||isNaN(n)) return '—'; return Math.round(n).toLocaleString('en-US'); }
+function fmtDateShort(d){ if(!d) return ''; const p=d.split('-'); return p.length===3? `${p[1]}/${p[2]}` : d; }
+function byDateDesc(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.updatedAt||0)-(a.updatedAt||0); }
+function groupByMonth(list){ const g={}; list.forEach(r=>{ const k=(r.date||'').slice(0,7)||'未知'; (g[k]=g[k]||[]).push(r); }); return g; }
+function mergeByUpdatedAt(localArr, remoteArr){
+  const map = new Map();
+  (localArr||[]).forEach(x=>map.set(x.id,x));
+  (remoteArr||[]).forEach(x=>{
+    const cur = map.get(x.id);
+    if(!cur || (x.updatedAt||0) >= (cur.updatedAt||0)) map.set(x.id,x);
+  });
+  return Array.from(map.values());
+}
+function addMonths(dateStr, months){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T00:00:00');
+  d.setMonth(d.getMonth()+months);
+  return d.toISOString().slice(0,10);
+}
+function daysBetween(d1,d2){ return Math.round((new Date(d2+'T00:00:00') - new Date(d1+'T00:00:00'))/86400000); }
+
+/* ============ DEFAULT META (依你目前的紀錄回推) ============ */
+const DEFAULT_META = {
+  key:'main',
+  initialMileage: 79646,
+  purchaseDate: '2021-10-24',
+  currentMileage: 122122,
+  updatedAt: 0,
+  reminders: {
+    licenseTax:   {lastDate:'2026-04-01', intervalMonths:12},
+    fuelTax:      {lastDate:'2026-06-26', intervalMonths:6},
+    inspection:   {lastDate:'2026-07-03', intervalMonths:12},
+    maintenance:  {lastDate:'2026-02-27', lastMileage:118767, intervalMonths:12, intervalKm:8000},
+    tireRotation: {lastDate:'2026-01-26', lastMileage:116120, intervalKm:6000}
+  }
+};
+
+/* ============ REMINDER LOGIC ============ */
+function computeReminder(name, icon, {lastDate, intervalMonths, lastMileage, intervalKm, currentMileage}){
+  const today = todayStr();
+  const dueDate = (lastDate && intervalMonths) ? addMonths(lastDate, intervalMonths) : null;
+  const dueKm = (lastMileage!=null && intervalKm!=null) ? lastMileage + intervalKm : null;
+  const daysLeft = dueDate!=null ? daysBetween(today, dueDate) : null;
+  const kmLeft = (dueKm!=null && currentMileage!=null) ? dueKm - currentMileage : null;
+  const urgencyOf = (d,k)=>{
+    const dU = d!=null ? (d<=14?'urgent':d<=45?'soon':'ok') : 'ok';
+    const kU = k!=null ? (k<=500?'urgent':k<=1500?'soon':'ok') : 'ok';
+    const order={urgent:2,soon:1,ok:0};
+    return order[dU]>=order[kU]? dU : kU;
+  };
+  return {name, icon, daysLeft, kmLeft, urgency: urgencyOf(daysLeft,kmLeft)};
+}
+function fmtReminder(daysLeft, kmLeft){
+  const parts=[];
+  if(daysLeft!=null) parts.push(daysLeft<0? `逾期${-daysLeft}天` : `${daysLeft}天後`);
+  if(kmLeft!=null) parts.push(kmLeft<0? `已超${fmtNum(-kmLeft)}km` : `${fmtNum(kmLeft)}km後`);
+  return parts.length? parts.join(' / ') : '—';
+}
+function buildReminders(meta){
+  const r = meta.reminders, cm = meta.currentMileage;
+  const list = [
+    computeReminder('牌照稅','📋', {lastDate:r.licenseTax.lastDate, intervalMonths:r.licenseTax.intervalMonths}),
+    computeReminder('燃料稅','🧾', {lastDate:r.fuelTax.lastDate, intervalMonths:r.fuelTax.intervalMonths}),
+    computeReminder('驗車','✅', {lastDate:r.inspection.lastDate, intervalMonths:r.inspection.intervalMonths}),
+    computeReminder('保養','🔧', {lastDate:r.maintenance.lastDate, intervalMonths:r.maintenance.intervalMonths, lastMileage:r.maintenance.lastMileage, intervalKm:r.maintenance.intervalKm, currentMileage:cm}),
+    computeReminder('調胎','🛞', {lastMileage:r.tireRotation.lastMileage, intervalKm:r.tireRotation.intervalKm, currentMileage:cm}),
+  ];
+  const order={urgent:0,soon:1,ok:2};
+  return list.sort((a,b)=>order[a.urgency]-order[b.urgency]);
+}
+function applyRecordToMeta(meta, rec){
+  let changed = false;
+  const R = {...meta.reminders};
+  let currentMileage = meta.currentMileage;
+  if(rec.mileage!=null && rec.mileage > (currentMileage||0)){ currentMileage = rec.mileage; changed = true; }
+  if(rec.category==='tax_license'){ R.licenseTax = {...R.licenseTax, lastDate: rec.date}; changed = true; }
+  if(rec.category==='tax_fuel'){ R.fuelTax = {...R.fuelTax, lastDate: rec.date}; changed = true; }
+  if(rec.category==='inspection'){ R.inspection = {...R.inspection, lastDate: rec.date}; changed = true; }
+  if(rec.category==='maintenance'){ R.maintenance = {...R.maintenance, lastDate: rec.date, lastMileage: rec.mileage!=null? rec.mileage : R.maintenance.lastMileage}; changed = true; }
+  if(rec.category==='tire'){ R.tireRotation = {...R.tireRotation, lastDate: rec.date, lastMileage: rec.mileage!=null? rec.mileage : R.tireRotation.lastMileage}; changed = true; }
+  if(!changed) return meta;
+  return {...meta, currentMileage, reminders:R, updatedAt: Date.now()};
+}
+
+/* ============ SMALL UI PIECES ============ */
+function TabBtn({icon,label,active,onClick}){
+  return <div className={"tab"+(active?' active':'')} onClick={onClick}>
+    <div className="ic">{icon}</div><div>{label}</div>
+  </div>;
+}
+function FilterChip({active,label,onClick}){
+  return <div onClick={onClick} style={{
+    flex:'0 0 auto',padding:'8px 13px',borderRadius:20,fontSize:12.5,whiteSpace:'nowrap',
+    background: active? 'rgba(232,163,61,.16)':'var(--panel)',
+    border:'1px solid '+(active?'var(--gauge-amber)':'var(--line)'),
+    color: active? 'var(--ink)':'var(--ink-dim)'
+  }}>{label}</div>;
+}
+function RecordRow({rec,onClick}){
+  const cat = CAT_MAP[rec.category] || CAT_MAP.other;
+  return <div className="rec-item" onClick={onClick}>
+    <div className="rec-icon" style={{background:cat.color+'26',color:cat.color}}>{cat.icon}</div>
+    <div className="rec-mid">
+      <div className="rec-cat">{cat.name}{rec.mileage!=null? ` · ${fmtNum(rec.mileage)}km` : ''}</div>
+      {rec.note && <div className="rec-note">{rec.note}</div>}
+    </div>
+    <div>
+      <div className={"rec-amt"+(rec.amount? '':' zero')}>{rec.amount? '$'+fmtNum(rec.amount) : '—'}</div>
+      <div className="rec-date">{fmtDateShort(rec.date)}</div>
+    </div>
+  </div>;
+}
+
+/* ============ LOGIN ============ */
+function LoginScreen(){
+  const [email,setEmail] = useState(safeGet('moko:lastEmail')||'');
+  const [pw,setPw] = useState('');
+  const [mode,setMode] = useState('signin');
+  const [err,setErr] = useState('');
+  const [busy,setBusy] = useState(false);
+  async function submit(){
+    if(!email || !pw){ setErr('請輸入帳號密碼'); return; }
+    setBusy(true); setErr('');
+    try{
+      if(mode==='signin') await auth.signInWithEmailAndPassword(email,pw);
+      else await auth.createUserWithEmailAndPassword(email,pw);
+      safeSet('moko:lastEmail', email);
+    }catch(e){ setErr(e.message||'登入失敗'); }
+    setBusy(false);
+  }
+  return <div className="center-screen">
+    <div className="logo-splash">MOKO LEDGER</div>
+    <div style={{fontSize:13,color:'var(--ink-dim)',marginTop:8,marginBottom:28}}>墨哥支出帳本</div>
+    <div style={{width:'100%',maxWidth:320}}>
+      <div className="field"><label>帳號 Email</label>
+        <input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoCapitalize="none" autoCorrect="off"/></div>
+      <div className="field"><label>密碼</label>
+        <input value={pw} onChange={e=>setPw(e.target.value)} type="password"/></div>
+      {err && <div style={{color:'var(--gauge-red)',fontSize:12,marginBottom:12}}>{err}</div>}
+      <button className="btn btn-primary" style={{width:'100%'}} onClick={submit} disabled={busy}>
+        {busy? '處理中…' : (mode==='signin'? '登入':'建立帳號')}
+      </button>
+      <div style={{textAlign:'center',marginTop:14,fontSize:12,color:'var(--ink-dim)'}}
+        onClick={()=>setMode(mode==='signin'?'signup':'signin')}>
+        {mode==='signin'? '第一次使用？建立帳號' : '已有帳號？登入'}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ============ DASHBOARD ============ */
+function Dashboard({meta,records,issues,online,syncState,onQuickAdd,onOpenAdd,onGoTab}){
+  const reminders = buildReminders(meta);
+  const valid = records.filter(r=>!r.deleted);
+  const totalSpent = valid.reduce((s,r)=>s+(r.amount||0),0);
+  const recent = valid.slice(0,6);
+  const openIssues = issues.filter(i=>!i.deleted && i.status==='open');
+  const dotClass = !online? 'sync-off' : syncState==='pending'? 'sync-pending' : 'sync-ok';
+  const dotText = !online? '離線，資料存於本機' : syncState==='pending'? '同步中…' : '已同步';
+  return <div>
+    <div className="odo-wrap">
+      <div className="odo-label">目前里程 <span className={"sync-dot "+dotClass}></span><span style={{fontSize:10,textTransform:'none',letterSpacing:0}}>{dotText}</span></div>
+      <div className="odo-value">{fmtNum(meta.currentMileage)}<small>km</small></div>
+      <div className="odo-sub">
+        <span>累積 <b>{fmtNum((meta.currentMileage||0)-(meta.initialMileage||0))}</b> km</span>
+        <span>總支出 <b>${fmtNum(totalSpent)}</b></span>
+      </div>
+    </div>
+
+    <div className="section-title">近期提醒</div>
+    <div className="reminder-row">
+      {reminders.map(r=>
+        <div key={r.name} className={"reminder-card "+r.urgency}>
+          <div className="reminder-name">{r.icon} {r.name}</div>
+          <div className={"reminder-value "+r.urgency}>{fmtReminder(r.daysLeft,r.kmLeft)}</div>
+        </div>
+      )}
+    </div>
+
+    <div className="section-title">快速記錄</div>
+    <div className="quickchip-row">
+      <div className="quickchip" onClick={()=>onQuickAdd('fuel')}><span className="em">⛽</span>加油</div>
+      <div className="quickchip" onClick={()=>onQuickAdd('carwash')}><span className="em">🚿</span>洗車</div>
+      <div className="quickchip" onClick={()=>onQuickAdd('etag')}><span className="em">💳</span>etag</div>
+      <div className="quickchip" onClick={onOpenAdd}><span className="em">➕</span>其他</div>
+    </div>
+
+    <div className="section-title">最近紀錄</div>
+    {recent.length===0 ? <div className="empty">還沒有任何紀錄，點右下角開始記帳</div> :
+      recent.map(r=><RecordRow key={r.id} rec={r} onClick={()=>onGoTab('timeline')}/>)}
+
+    {openIssues.length>0 && <>
+      <div className="section-title">未解決事件</div>
+      {openIssues.map(i=><div key={i.id} className="issue-card" onClick={()=>onGoTab('issues')}>
+        <div className="issue-title">{i.title}</div>
+        <div className="rec-date" style={{textAlign:'left',marginTop:4}}>{fmtDateShort(i.date)}</div>
+      </div>)}
+    </>}
+  </div>;
+}
+
+/* ============ TIMELINE ============ */
+function Timeline({records,onEdit}){
+  const [filter,setFilter] = useState('all');
+  const list = records.filter(r=>!r.deleted && (filter==='all'||r.category===filter)).sort(byDateDesc);
+  const groups = groupByMonth(list);
+  return <div>
+    <div style={{display:'flex',gap:8,overflowX:'auto',marginBottom:16,paddingBottom:2}}>
+      <FilterChip active={filter==='all'} label="全部" onClick={()=>setFilter('all')}/>
+      {CATEGORIES.map(c=><FilterChip key={c.id} active={filter===c.id} label={c.icon+' '+c.name} onClick={()=>setFilter(c.id)}/>)}
+    </div>
+    {Object.keys(groups).length===0 ? <div className="empty">沒有符合條件的紀錄</div> :
+      Object.entries(groups).map(([month,items])=>
+        <div key={month}>
+          <div className="day-divider">{month}</div>
+          {items.map(r=><RecordRow key={r.id} rec={r} onClick={()=>onEdit(r)}/>)}
+        </div>
+      )}
+  </div>;
+}
+
+/* ============ ISSUES ============ */
+function IssuesScreen({issues,onAddIssue,onAddFollowup,onToggleStatus}){
+  const list = issues.filter(i=>!i.deleted).sort(byDateDesc);
+  return <div>
+    <button className="btn btn-primary" style={{width:'100%',marginBottom:14}} onClick={onAddIssue}>+ 新增故障/異常事件</button>
+    {list.length===0 ? <div className="empty">目前沒有紀錄的異常事件</div> :
+      list.map(i=>
+        <div key={i.id} className="issue-card">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div className="issue-title">{i.title}</div>
+            <span className={"issue-status "+i.status} onClick={()=>onToggleStatus(i)}>
+              {i.status==='open'? '處理中':'已解決'}
+            </span>
+          </div>
+          <div className="rec-date" style={{textAlign:'left',marginTop:4}}>{fmtDateShort(i.date)}</div>
+          {i.note && <div className="rec-note" style={{whiteSpace:'normal',marginTop:6}}>{i.note}</div>}
+          {(i.followups||[]).map((f,idx)=>
+            <div key={idx} className="followup">{fmtDateShort(f.date)}：{f.note}</div>)}
+          <div className="btn btn-ghost" style={{marginTop:10,padding:'8px',fontSize:12}}
+            onClick={()=>onAddFollowup(i)}>+ 新增後續處理</div>
+        </div>
+      )}
+  </div>;
+}
+
+/* ============ STATS ============ */
+function StatsScreen({records}){
+  const barRef = useRef(null), catRef = useRef(null);
+  const barChart = useRef(null), catChart = useRef(null);
+  const valid = records.filter(r=>!r.deleted);
+  const byYear = {}; valid.forEach(r=>{ const y=(r.date||'').slice(0,4)||'—'; byYear[y]=(byYear[y]||0)+(r.amount||0); });
+  const years = Object.keys(byYear).sort();
+  const byCat = {}; valid.forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+(r.amount||0); });
+  const catEntries = Object.entries(byCat).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+
+  useEffect(()=>{
+    if(barChart.current) barChart.current.destroy();
+    if(barRef.current && years.length){
+      barChart.current = new Chart(barRef.current, {
+        type:'bar',
+        data:{labels:years, datasets:[{label:'年度支出', data:years.map(y=>byYear[y]), backgroundColor:'#e8a33d', borderRadius:6}]},
+        options:{plugins:{legend:{display:false}}, scales:{
+          x:{ticks:{color:'#8b96a5'}, grid:{color:'#2c3440'}},
+          y:{ticks:{color:'#8b96a5'}, grid:{color:'#2c3440'}}
+        }}
+      });
+    }
+    return ()=>{ if(barChart.current) barChart.current.destroy(); };
+  },[JSON.stringify(byYear)]);
+
+  useEffect(()=>{
+    if(catChart.current) catChart.current.destroy();
+    if(catRef.current && catEntries.length){
+      catChart.current = new Chart(catRef.current, {
+        type:'doughnut',
+        data:{
+          labels:catEntries.map(e=>CAT_MAP[e[0]]? CAT_MAP[e[0]].name : e[0]),
+          datasets:[{data:catEntries.map(e=>e[1]), backgroundColor:catEntries.map(e=>CAT_MAP[e[0]]? CAT_MAP[e[0]].color:'#8b96a5')}]
+        },
+        options:{plugins:{legend:{position:'bottom', labels:{color:'#e8ecf1', boxWidth:11, font:{size:11}}}}}
+      });
+    }
+    return ()=>{ if(catChart.current) catChart.current.destroy(); };
+  },[JSON.stringify(byCat)]);
+
+  return <div>
+    <div className="section-title">年度支出</div>
+    <div className="stat-box"><canvas ref={barRef} height="180"></canvas></div>
+    <div className="section-title">類別佔比</div>
+    <div className="stat-box"><canvas ref={catRef} height="220"></canvas></div>
+    <div className="section-title">類別明細</div>
+    <div className="stat-box">
+      {catEntries.length===0? <div className="empty">尚無資料</div> :
+        catEntries.map(([cid,amt])=>
+          <div className="stat-row" key={cid}>
+            <span>{CAT_MAP[cid]? CAT_MAP[cid].icon+' '+CAT_MAP[cid].name : cid}</span>
+            <b>${fmtNum(amt)}</b>
+          </div>
+        )}
+    </div>
+  </div>;
+}
+
+/* ============ SETTINGS ============ */
+function IntervalField({label,unit,value,onChange,dateValue,onDateChange,kmValue,onKmChange}){
+  return <div className="field">
+    <label>{label}</label>
+    <div style={{display:'flex',gap:8}}>
+      <input type="date" style={{flex:1}} value={dateValue||''} onChange={e=>onDateChange(e.target.value)}/>
+      <input type="number" style={{flex:'0 0 76px'}} value={value} onChange={e=>onChange(+e.target.value)} placeholder={unit}/>
+    </div>
+    {onKmChange && <div style={{display:'flex',gap:8,marginTop:8}}>
+      <input type="number" style={{flex:1}} value={kmValue} onChange={e=>onKmChange(+e.target.value)} placeholder="里程間隔 km"/>
+    </div>}
+  </div>;
+}
+function SettingsScreen({meta,onSaveMeta,onLogout,records,issues}){
+  const [m,setM] = useState(meta);
+  useEffect(()=>setM(meta),[meta]);
+  function setR(key,patch){ setM(prev=>({...prev, reminders:{...prev.reminders, [key]:{...prev.reminders[key], ...patch}}})); }
+  function exportData(){
+    const data = {records,issues,meta,exportedAt:new Date().toISOString()};
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'moko-backup-'+todayStr()+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  return <div>
+    <div className="section-title">車輛資訊</div>
+    <div className="field"><label>目前里程 (km)</label>
+      <input type="number" value={m.currentMileage} onChange={e=>setM({...m,currentMileage:+e.target.value})}/></div>
+    <div className="field"><label>初始里程 (km)</label>
+      <input type="number" value={m.initialMileage} onChange={e=>setM({...m,initialMileage:+e.target.value})}/></div>
+    <div className="field"><label>購車日期</label>
+      <input type="date" value={m.purchaseDate} onChange={e=>setM({...m,purchaseDate:e.target.value})}/></div>
+
+    <div className="section-title">提醒週期設定（日期＋間隔月數）</div>
+    <IntervalField label="牌照稅" unit="月" dateValue={m.reminders.licenseTax.lastDate} value={m.reminders.licenseTax.intervalMonths}
+      onDateChange={v=>setR('licenseTax',{lastDate:v})} onChange={v=>setR('licenseTax',{intervalMonths:v})}/>
+    <IntervalField label="燃料稅" unit="月" dateValue={m.reminders.fuelTax.lastDate} value={m.reminders.fuelTax.intervalMonths}
+      onDateChange={v=>setR('fuelTax',{lastDate:v})} onChange={v=>setR('fuelTax',{intervalMonths:v})}/>
+    <IntervalField label="驗車" unit="月" dateValue={m.reminders.inspection.lastDate} value={m.reminders.inspection.intervalMonths}
+      onDateChange={v=>setR('inspection',{lastDate:v})} onChange={v=>setR('inspection',{intervalMonths:v})}/>
+    <IntervalField label="保養" unit="月" dateValue={m.reminders.maintenance.lastDate} value={m.reminders.maintenance.intervalMonths}
+      onDateChange={v=>setR('maintenance',{lastDate:v})} onChange={v=>setR('maintenance',{intervalMonths:v})}
+      kmValue={m.reminders.maintenance.intervalKm} onKmChange={v=>setR('maintenance',{intervalKm:v})}/>
+    <div className="field"><label>調胎 上次里程 / 間隔 km</label>
+      <div style={{display:'flex',gap:8}}>
+        <input type="number" style={{flex:1}} value={m.reminders.tireRotation.lastMileage} onChange={e=>setR('tireRotation',{lastMileage:+e.target.value})}/>
+        <input type="number" style={{flex:1}} value={m.reminders.tireRotation.intervalKm} onChange={e=>setR('tireRotation',{intervalKm:+e.target.value})}/>
+      </div>
+    </div>
+
+    <button className="btn btn-primary" style={{width:'100%',marginTop:6}} onClick={()=>onSaveMeta(m)}>儲存設定</button>
+
+    <div className="section-title">資料備份</div>
+    <button className="btn btn-ghost" style={{width:'100%'}} onClick={exportData}>匯出 JSON 備份</button>
+
+    <div className="section-title">帳號</div>
+    <button className="btn btn-danger" style={{width:'100%'}} onClick={onLogout}>登出</button>
+  </div>;
+}
+
+/* ============ MODALS ============ */
+function AddModal({initial,onSave,onDelete,onClose}){
+  const [category,setCategory] = useState((initial&&initial.category)||'fuel');
+  const [date,setDate] = useState((initial&&initial.date)||todayStr());
+  const [amount,setAmount] = useState(initial&&initial.amount!=null? String(initial.amount) : '');
+  const [mileage,setMileage] = useState(initial&&initial.mileage!=null? String(initial.mileage) : '');
+  const [note,setNote] = useState((initial&&initial.note)||'');
+  function submit(){
+    onSave({
+      id: initial&&initial.id? initial.id : undefined,
+      category, date,
+      amount: amount===''? 0 : +amount,
+      mileage: mileage===''? null : +mileage,
+      note
+    });
+  }
+  return <div className="modal-bg" onClick={onClose}>
+    <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+      <div className="modal-handle"></div>
+      <div className="modal-title">{initial&&initial.id? '編輯紀錄':'新增紀錄'}</div>
+      <div className="cat-grid">
+        {CATEGORIES.map(c=>
+          <div key={c.id} className={"cat-btn"+(category===c.id?' active':'')} onClick={()=>setCategory(c.id)}>
+            <span className="em">{c.icon}</span>{c.name}
+          </div>
+        )}
+      </div>
+      <div className="field"><label>日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+      <div className="field"><label>金額（元，可留空或0）</label>
+        <input type="number" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0"/></div>
+      <div className="field"><label>里程（選填）</label>
+        <input type="number" inputMode="numeric" value={mileage} onChange={e=>setMileage(e.target.value)} placeholder="不記錄可留空"/></div>
+      <div className="field"><label>備註</label><textarea value={note} onChange={e=>setNote(e.target.value)}/></div>
+      <button className="btn btn-primary" style={{width:'100%'}} onClick={submit}>儲存</button>
+      {initial&&initial.id && <button className="btn btn-danger" style={{width:'100%',marginTop:10}} onClick={()=>onDelete(initial)}>刪除這筆紀錄</button>}
+    </div>
+  </div>;
+}
+function IssueModal({onSave,onClose}){
+  const [title,setTitle] = useState('');
+  const [date,setDate] = useState(todayStr());
+  const [note,setNote] = useState('');
+  return <div className="modal-bg" onClick={onClose}>
+    <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+      <div className="modal-handle"></div>
+      <div className="modal-title">新增異常事件</div>
+      <div className="field"><label>標題</label>
+        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="例：ABS/ESC故障"/></div>
+      <div className="field"><label>日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+      <div className="field"><label>說明</label><textarea value={note} onChange={e=>setNote(e.target.value)}/></div>
+      <button className="btn btn-primary" style={{width:'100%'}}
+        onClick={()=>title.trim() && onSave({title:title.trim(),date,note})}>儲存</button>
+    </div>
+  </div>;
+}
+function FollowupModal({issue,onSave,onClose}){
+  const [date,setDate] = useState(todayStr());
+  const [note,setNote] = useState('');
+  return <div className="modal-bg" onClick={onClose}>
+    <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+      <div className="modal-handle"></div>
+      <div className="modal-title">新增後續處理：{issue.title}</div>
+      <div className="field"><label>日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+      <div className="field"><label>說明</label>
+        <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="處理結果、費用等"/></div>
+      <button className="btn btn-primary" style={{width:'100%'}}
+        onClick={()=>note.trim() && onSave({date,note:note.trim()})}>新增</button>
+    </div>
+  </div>;
+}
+
+/* ============ APP ============ */
+function App(){
+  const [user,setUser] = useState(null);
+  const [authLoading,setAuthLoading] = useState(true);
+  const [records,setRecords] = useState([]);
+  const [issues,setIssues] = useState([]);
+  const [meta,setMeta] = useState(DEFAULT_META);
+  const [tab,setTab] = useState('dashboard');
+  const [online,setOnline] = useState(navigator.onLine);
+  const [syncState,setSyncState] = useState('ok');
+
+  const [showAdd,setShowAdd] = useState(false);
+  const [editingRecord,setEditingRecord] = useState(null);
+  const [addPrefill,setAddPrefill] = useState(null);
+  const [showIssueAdd,setShowIssueAdd] = useState(false);
+  const [followupTarget,setFollowupTarget] = useState(null);
+
+  useEffect(()=>{
+    const onOnline=()=>{ setOnline(true); if(user) pullFirestore(user.uid); };
+    const onOffline=()=>setOnline(false);
+    window.addEventListener('online',onOnline);
+    window.addEventListener('offline',onOffline);
+    return ()=>{ window.removeEventListener('online',onOnline); window.removeEventListener('offline',onOffline); };
+  },[user]);
+
+  useEffect(()=>{
+    const unsub = auth.onAuthStateChanged(async (u)=>{
+      setUser(u);
+      setAuthLoading(false);
+      if(u) await loadAll(u.uid);
+    });
+    return unsub;
+  },[]);
+
+  async function loadAll(uidVal){
+    setSyncState('pending');
+    try{
+      let localRecords = await idbGetAll('records');
+      let localIssues = await idbGetAll('issues');
+      let metaRows = await idbGetAll('meta');
+      let localMeta = metaRows.find(x=>x.key==='main');
+      if(!localMeta){
+        const raw = safeGet('moko:meta');
+        if(raw){ try{ localMeta = JSON.parse(raw); }catch(e){} }
+      }
+      if(!localMeta) localMeta = DEFAULT_META;
+      if((!localRecords || localRecords.length===0)){
+        const raw = safeGet('moko:records');
+        if(raw){ try{ localRecords = JSON.parse(raw); }catch(e){ localRecords=[]; } }
+      }
+      if((!localIssues || localIssues.length===0)){
+        const raw = safeGet('moko:issues');
+        if(raw){ try{ localIssues = JSON.parse(raw); }catch(e){ localIssues=[]; } }
+      }
+      setRecords((localRecords||[]).slice().sort(byDateDesc));
+      setIssues((localIssues||[]).slice().sort(byDateDesc));
+      setMeta(localMeta);
+      if(navigator.onLine) await pullFirestore(uidVal, localRecords, localIssues, localMeta);
+      else setSyncState('off');
+    }catch(e){
+      console.error(e); setSyncState('off');
+    }
+  }
+
+  async function pullFirestore(uidVal, curRecords, curIssues, curMeta){
+    try{
+      const uu = uidVal || (auth.currentUser && auth.currentUser.uid);
+      if(!uu) return;
+      curRecords = curRecords || records;
+      curIssues = curIssues || issues;
+      curMeta = curMeta || meta;
+      const recSnap = await db.collection('car-expense').doc(uu).collection('records').get();
+      const remoteRecords = recSnap.docs.map(d=>d.data());
+      const issueSnap = await db.collection('car-expense').doc(uu).collection('issues').get();
+      const remoteIssues = issueSnap.docs.map(d=>d.data());
+      const metaDoc = await db.collection('car-expense').doc(uu).get();
+      const remoteMeta = (metaDoc.exists && metaDoc.data().meta) ? metaDoc.data().meta : null;
+
+      const mergedRecords = mergeByUpdatedAt(curRecords, remoteRecords);
+      const mergedIssues = mergeByUpdatedAt(curIssues, remoteIssues);
+      const mergedMeta = (remoteMeta && (remoteMeta.updatedAt||0) > (curMeta.updatedAt||0)) ? remoteMeta : curMeta;
+
+      for(const r of mergedRecords) await idbPut('records', r);
+      for(const i of mergedIssues) await idbPut('issues', i);
+      await idbPut('meta', {key:'main', ...mergedMeta});
+      safeSet('moko:records', JSON.stringify(mergedRecords));
+      safeSet('moko:issues', JSON.stringify(mergedIssues));
+      safeSet('moko:meta', JSON.stringify(mergedMeta));
+
+      setRecords(mergedRecords.slice().sort(byDateDesc));
+      setIssues(mergedIssues.slice().sort(byDateDesc));
+      setMeta(mergedMeta);
+      setSyncState('ok');
+    }catch(e){
+      console.error('pull failed', e); setSyncState('off');
+    }
+  }
+
+  async function persistRecordsLocal(){
+    const all = await idbGetAll('records');
+    safeSet('moko:records', JSON.stringify(all));
+  }
+  async function persistIssuesLocal(){
+    const all = await idbGetAll('issues');
+    safeSet('moko:issues', JSON.stringify(all));
+  }
+
+  async function pushToFirestore(kind, obj){
+    try{
+      const uu = auth.currentUser && auth.currentUser.uid;
+      if(!uu || !navigator.onLine) return;
+      if(kind==='record') await db.collection('car-expense').doc(uu).collection('records').doc(obj.id).set(obj);
+      if(kind==='issue') await db.collection('car-expense').doc(uu).collection('issues').doc(obj.id).set(obj);
+      if(kind==='meta') await db.collection('car-expense').doc(uu).set({meta:obj},{merge:true});
+      setSyncState('ok');
+    }catch(e){
+      console.error('push failed',e); setSyncState('pending');
+    }
+  }
+
+  async function saveMeta(newMeta){
+    const stamped = {...newMeta, updatedAt: Date.now()};
+    setMeta(stamped);
+    await idbPut('meta',{key:'main', ...stamped});
+    safeSet('moko:meta', JSON.stringify(stamped));
+    pushToFirestore('meta', stamped);
+  }
+
+  async function handleSaveRecord(data){
+    const now = Date.now();
+    const full = {...data, id: data.id || uid(), updatedAt: now, deleted:false};
+    setRecords(prev=>{
+      const idx = prev.findIndex(r=>r.id===full.id);
+      const next = idx>=0 ? prev.map(r=>r.id===full.id? full : r) : [full,...prev];
+      return next.sort(byDateDesc);
+    });
+    await idbPut('records', full);
+    await persistRecordsLocal();
+    const newMeta = applyRecordToMeta(meta, full);
+    if(newMeta !== meta){
+      setMeta(newMeta);
+      await idbPut('meta',{key:'main', ...newMeta});
+      safeSet('moko:meta', JSON.stringify(newMeta));
+      pushToFirestore('meta', newMeta);
+    }
+    pushToFirestore('record', full);
+    setShowAdd(false); setEditingRecord(null); setAddPrefill(null);
+  }
+
+  async function handleDeleteRecord(rec){
+    const full = {...rec, deleted:true, updatedAt: Date.now()};
+    setRecords(prev=>prev.map(r=>r.id===full.id? full : r));
+    await idbPut('records', full);
+    await persistRecordsLocal();
+    pushToFirestore('record', full);
+    setShowAdd(false); setEditingRecord(null); setAddPrefill(null);
+  }
+
+  async function handleSaveIssue(data){
+    const now = Date.now();
+    const full = {...data, id: uid(), status:'open', followups:[], createdAt:now, updatedAt:now, deleted:false};
+    setIssues(prev=>[full,...prev].sort(byDateDesc));
+    await idbPut('issues', full);
+    await persistIssuesLocal();
+    pushToFirestore('issue', full);
+    setShowIssueAdd(false);
+  }
+  async function toggleIssueStatus(issue){
+    const full = {...issue, status: issue.status==='open'?'resolved':'open', updatedAt: Date.now()};
+    setIssues(prev=>prev.map(i=>i.id===full.id? full : i));
+    await idbPut('issues', full);
+    await persistIssuesLocal();
+    pushToFirestore('issue', full);
+  }
+  async function handleAddFollowup(issue, data){
+    const full = {...issue, followups:[...(issue.followups||[]), {...data, createdAt:Date.now()}], updatedAt: Date.now()};
+    setIssues(prev=>prev.map(i=>i.id===full.id? full : i));
+    await idbPut('issues', full);
+    await persistIssuesLocal();
+    pushToFirestore('issue', full);
+    setFollowupTarget(null);
+  }
+
+  if(authLoading) return <div className="center-screen"><div className="logo-splash">MOKO LEDGER</div></div>;
+  if(!user) return <LoginScreen/>;
+
+  const addInitial = editingRecord || addPrefill;
+
+  return <>
+    <div className="screen">
+      {tab==='dashboard' && <Dashboard meta={meta} records={records} issues={issues} online={online} syncState={syncState}
+        onQuickAdd={cat=>{ setEditingRecord(null); setAddPrefill({category:cat}); setShowAdd(true); }}
+        onOpenAdd={()=>{ setEditingRecord(null); setAddPrefill(null); setShowAdd(true); }}
+        onGoTab={setTab}/>}
+      {tab==='timeline' && <Timeline records={records} onEdit={r=>{ setEditingRecord(r); setShowAdd(true); }}/>}
+      {tab==='issues' && <IssuesScreen issues={issues}
+        onAddIssue={()=>setShowIssueAdd(true)}
+        onAddFollowup={i=>setFollowupTarget(i)}
+        onToggleStatus={toggleIssueStatus}/>}
+      {tab==='stats' && <StatsScreen records={records}/>}
+      {tab==='settings' && <SettingsScreen meta={meta} onSaveMeta={saveMeta} onLogout={()=>auth.signOut()} records={records} issues={issues}/>}
+    </div>
+
+    {tab!=='settings' && <button className="fab" onClick={()=>{ setEditingRecord(null); setAddPrefill(null); setShowAdd(true); }}>+</button>}
+
+    <div className="tabbar">
+      <TabBtn icon="🏠" label="首頁" active={tab==='dashboard'} onClick={()=>setTab('dashboard')}/>
+      <TabBtn icon="📜" label="紀錄" active={tab==='timeline'} onClick={()=>setTab('timeline')}/>
+      <TabBtn icon="⚠️" label="事件" active={tab==='issues'} onClick={()=>setTab('issues')}/>
+      <TabBtn icon="📊" label="統計" active={tab==='stats'} onClick={()=>setTab('stats')}/>
+      <TabBtn icon="⚙️" label="設定" active={tab==='settings'} onClick={()=>setTab('settings')}/>
+    </div>
+
+    {showAdd && <AddModal initial={addInitial} onSave={handleSaveRecord} onDelete={handleDeleteRecord}
+      onClose={()=>{ setShowAdd(false); setEditingRecord(null); setAddPrefill(null); }}/>}
+    {showIssueAdd && <IssueModal onSave={handleSaveIssue} onClose={()=>setShowIssueAdd(false)}/>}
+    {followupTarget && <FollowupModal issue={followupTarget} onSave={data=>handleAddFollowup(followupTarget,data)} onClose={()=>setFollowupTarget(null)}/>}
+  </>;
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(e=>console.error('SW register failed',e));
+  });
+}
+</script>
+</body>
+</html>
