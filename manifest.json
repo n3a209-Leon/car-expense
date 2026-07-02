@@ -1,0 +1,12 @@
+{
+  "name": "墨哥帳本",
+  "short_name": "墨哥帳本",
+  "description": "墨哥支出與里程紀錄",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14181d",
+  "theme_color": "#14181d",
+  "orientation": "portrait",
+  "icons": []
+}
