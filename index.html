@@ -57,6 +57,7 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .sync-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
 .sync-ok{background:var(--gauge-teal);}
 .sync-pending{background:var(--gauge-amber);animation:pulse 1.4s infinite;}
+.sync-error{background:var(--gauge-red);}
 .sync-off{background:var(--ink-dim);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
@@ -131,6 +132,14 @@ input,textarea{-webkit-user-select:text;user-select:text;}
 .modal-sheet{background:var(--bg);width:100%;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;
   padding:18px 16px calc(env(safe-area-inset-bottom) + 20px);}
 .modal-handle{width:36px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.modal-head .modal-title{margin-bottom:0;}
+.modal-close{width:30px;height:30px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ink-dim);flex-shrink:0;}
+.check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--ink-dim);}
+.checkbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);background:var(--panel-2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:var(--gauge-amber);margin-top:1px;}
+.checkbox.checked{border-color:var(--gauge-amber);background:rgba(232,163,61,.12);}
 .modal-title{font-size:17px;font-weight:700;margin-bottom:16px;}
 
 .empty{text-align:center;color:var(--ink-dim);padding:40px 20px;font-size:13px;}
@@ -416,8 +425,8 @@ function Dashboard({meta,records,issues,online,syncState,onQuickAdd,onOpenAdd,on
   const totalSpent = valid.reduce((s,r)=>s+(r.amount||0),0);
   const recent = valid.slice(0,6);
   const openIssues = issues.filter(i=>!i.deleted && i.status==='open');
-  const dotClass = !online? 'sync-off' : syncState==='pending'? 'sync-pending' : 'sync-ok';
-  const dotText = !online? '離線，資料存於本機' : syncState==='pending'? '同步中…' : '已同步';
+  const dotClass = !online? 'sync-off' : syncState==='syncing'? 'sync-pending' : syncState==='error'? 'sync-error' : 'sync-ok';
+  const dotText = !online? '離線，資料存於本機' : syncState==='syncing'? '同步中…' : syncState==='error'? '同步失敗，資料已存本機' : '已同步 Firebase';
   return <div>
     <div className="odo-wrap">
       <div className="odo-label">目前里程 <span className={"sync-dot "+dotClass}></span><span style={{fontSize:10,textTransform:'none',letterSpacing:0}}>{dotText}</span></div>
@@ -509,7 +518,8 @@ function IssuesScreen({issues,onAddIssue,onAddFollowup,onToggleStatus}){
 function StatsScreen({records}){
   const barRef = useRef(null), catRef = useRef(null);
   const barChart = useRef(null), catChart = useRef(null);
-  const valid = records.filter(r=>!r.deleted);
+  const valid = records.filter(r=>!r.deleted && !r.excludeFromStats);
+  const excludedTotal = records.filter(r=>!r.deleted && r.excludeFromStats).reduce((s,r)=>s+(r.amount||0),0);
   const byYear = {}; valid.forEach(r=>{ const y=(r.date||'').slice(0,4)||'—'; byYear[y]=(byYear[y]||0)+(r.amount||0); });
   const years = Object.keys(byYear).sort();
   const byCat = {}; valid.forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+(r.amount||0); });
@@ -546,6 +556,9 @@ function StatsScreen({records}){
   },[JSON.stringify(byCat)]);
 
   return <div>
+    {excludedTotal>0 && <div style={{fontSize:11.5,color:'var(--ink-dim)',marginBottom:14,textAlign:'center'}}>
+      不含已排除項目（如購車款）${fmtNum(excludedTotal)}
+    </div>}
     <div className="section-title">年度支出</div>
     <div className="stat-box"><canvas ref={barRef} height="180"></canvas></div>
     <div className="section-title">類別佔比</div>
@@ -661,19 +674,24 @@ function AddModal({initial,onSave,onDelete,onClose}){
   const [amount,setAmount] = useState(initial&&initial.amount!=null? String(initial.amount) : '');
   const [mileage,setMileage] = useState(initial&&initial.mileage!=null? String(initial.mileage) : '');
   const [note,setNote] = useState((initial&&initial.note)||'');
+  const [excludeFromStats,setExcludeFromStats] = useState(!!(initial&&initial.excludeFromStats));
   function submit(){
     onSave({
       id: initial&&initial.id? initial.id : undefined,
       category, date,
       amount: amount===''? 0 : +amount,
       mileage: mileage===''? null : +mileage,
-      note
+      note,
+      excludeFromStats
     });
   }
   return <div className="modal-bg" onClick={onClose}>
     <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
       <div className="modal-handle"></div>
-      <div className="modal-title">{initial&&initial.id? '編輯紀錄':'新增紀錄'}</div>
+      <div className="modal-head">
+        <div className="modal-title">{initial&&initial.id? '編輯紀錄':'新增紀錄'}</div>
+        <div className="modal-close" onClick={onClose}>✕</div>
+      </div>
       <div className="cat-grid">
         {CATEGORIES.map(c=>
           <div key={c.id} className={"cat-btn"+(category===c.id?' active':'')} onClick={()=>setCategory(c.id)}>
@@ -687,8 +705,13 @@ function AddModal({initial,onSave,onDelete,onClose}){
       <div className="field"><label>里程（選填）</label>
         <input type="number" inputMode="numeric" value={mileage} onChange={e=>setMileage(e.target.value)} placeholder="不記錄可留空"/></div>
       <div className="field"><label>備註</label><textarea value={note} onChange={e=>setNote(e.target.value)}/></div>
+      <div className="check-row" onClick={()=>setExcludeFromStats(!excludeFromStats)}>
+        <div className={"checkbox"+(excludeFromStats?' checked':'')}>{excludeFromStats?'✓':''}</div>
+        <div>不計入統計報表（例如購車款等一次性大額支出）</div>
+      </div>
       <button className="btn btn-primary" style={{width:'100%'}} onClick={submit}>儲存</button>
       {initial&&initial.id && <button className="btn btn-danger" style={{width:'100%',marginTop:10}} onClick={()=>onDelete(initial)}>刪除這筆紀錄</button>}
+      <button className="btn btn-ghost" style={{width:'100%',marginTop:10}} onClick={onClose}>取消</button>
     </div>
   </div>;
 }
@@ -699,13 +722,17 @@ function IssueModal({onSave,onClose}){
   return <div className="modal-bg" onClick={onClose}>
     <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
       <div className="modal-handle"></div>
-      <div className="modal-title">新增異常事件</div>
+      <div className="modal-head">
+        <div className="modal-title">新增異常事件</div>
+        <div className="modal-close" onClick={onClose}>✕</div>
+      </div>
       <div className="field"><label>標題</label>
         <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="例：ABS/ESC故障"/></div>
       <div className="field"><label>日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
       <div className="field"><label>說明</label><textarea value={note} onChange={e=>setNote(e.target.value)}/></div>
       <button className="btn btn-primary" style={{width:'100%'}}
         onClick={()=>title.trim() && onSave({title:title.trim(),date,note})}>儲存</button>
+      <button className="btn btn-ghost" style={{width:'100%',marginTop:10}} onClick={onClose}>取消</button>
     </div>
   </div>;
 }
@@ -715,12 +742,16 @@ function FollowupModal({issue,onSave,onClose}){
   return <div className="modal-bg" onClick={onClose}>
     <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
       <div className="modal-handle"></div>
-      <div className="modal-title">新增後續處理：{issue.title}</div>
+      <div className="modal-head">
+        <div className="modal-title">新增後續處理：{issue.title}</div>
+        <div className="modal-close" onClick={onClose}>✕</div>
+      </div>
       <div className="field"><label>日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
       <div className="field"><label>說明</label>
         <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="處理結果、費用等"/></div>
       <button className="btn btn-primary" style={{width:'100%'}}
         onClick={()=>note.trim() && onSave({date,note:note.trim()})}>新增</button>
+      <button className="btn btn-ghost" style={{width:'100%',marginTop:10}} onClick={onClose}>取消</button>
     </div>
   </div>;
 }
@@ -773,7 +804,7 @@ function App(){
   },[]);
 
   async function loadAll(uidVal){
-    setSyncState('pending');
+    setSyncState('syncing');
     try{
       let localRecords = await idbGetAll('records');
       let localIssues = await idbGetAll('issues');
@@ -798,9 +829,17 @@ function App(){
       if(navigator.onLine) await pullFirestore(uidVal, localRecords, localIssues, localMeta);
       else setSyncState('off');
     }catch(e){
-      console.error(e); setSyncState('off');
+      console.error(e); setSyncState('error');
     }
   }
+
+  // 資料表路徑沿用 Venus OS 已經在用、且已知有正確權限規則的
+  // users/{uid}/data/{key} 子集合（{value:...} 包裝），
+  // 避免因為開一個全新的 car-expense collection 而被 Firestore 安全規則擋下寫入。
+  function dataCol(uu){ return db.collection('users').doc(uu).collection('data'); }
+  const KEY_RECORD_PREFIX = 'car:record:';
+  const KEY_ISSUE_PREFIX = 'car:issue:';
+  const KEY_META = 'car:meta';
 
   async function pullFirestore(uidVal, curRecords, curIssues, curMeta){
     try{
@@ -809,12 +848,22 @@ function App(){
       curRecords = curRecords || records;
       curIssues = curIssues || issues;
       curMeta = curMeta || meta;
-      const recSnap = await db.collection('car-expense').doc(uu).collection('records').get();
-      const remoteRecords = recSnap.docs.map(d=>d.data());
-      const issueSnap = await db.collection('car-expense').doc(uu).collection('issues').get();
-      const remoteIssues = issueSnap.docs.map(d=>d.data());
-      const metaDoc = await db.collection('car-expense').doc(uu).get();
-      const remoteMeta = (metaDoc.exists && metaDoc.data().meta) ? metaDoc.data().meta : null;
+
+      const col = dataCol(uu);
+      const recSnap = await col
+        .where(firebase.firestore.FieldPath.documentId(), '>=', KEY_RECORD_PREFIX)
+        .where(firebase.firestore.FieldPath.documentId(), '<', KEY_RECORD_PREFIX+'\uf8ff')
+        .get();
+      const remoteRecords = recSnap.docs.map(d=>d.data().value).filter(Boolean);
+
+      const issueSnap = await col
+        .where(firebase.firestore.FieldPath.documentId(), '>=', KEY_ISSUE_PREFIX)
+        .where(firebase.firestore.FieldPath.documentId(), '<', KEY_ISSUE_PREFIX+'\uf8ff')
+        .get();
+      const remoteIssues = issueSnap.docs.map(d=>d.data().value).filter(Boolean);
+
+      const metaDoc = await col.doc(KEY_META).get();
+      const remoteMeta = (metaDoc.exists && metaDoc.data().value) ? metaDoc.data().value : null;
 
       const mergedRecords = mergeByUpdatedAt(curRecords, remoteRecords);
       const mergedIssues = mergeByUpdatedAt(curIssues, remoteIssues);
@@ -831,8 +880,21 @@ function App(){
       setIssues(mergedIssues.slice().sort(byDateDesc));
       setMeta(mergedMeta);
       setSyncState('ok');
+
+      // 一次性搬遷：如果雲端這個新路徑是空的、但本機已經有資料
+      // （例如剛從舊的 car-expense 路徑換過來），自動把本機資料補寫上去，
+      // 不用使用者一筆一筆重新編輯才能觸發同步。
+      if(recSnap.empty && mergedRecords.length>0){
+        for(const r of mergedRecords) await pushToFirestore('record', r);
+      }
+      if(issueSnap.empty && mergedIssues.length>0){
+        for(const i of mergedIssues) await pushToFirestore('issue', i);
+      }
+      if(!metaDoc.exists){
+        await pushToFirestore('meta', mergedMeta);
+      }
     }catch(e){
-      console.error('pull failed', e); setSyncState('off');
+      console.error('pull failed', e); setSyncState('error');
     }
   }
 
@@ -849,12 +911,14 @@ function App(){
     try{
       const uu = auth.currentUser && auth.currentUser.uid;
       if(!uu || !navigator.onLine) return;
-      if(kind==='record') await db.collection('car-expense').doc(uu).collection('records').doc(obj.id).set(obj);
-      if(kind==='issue') await db.collection('car-expense').doc(uu).collection('issues').doc(obj.id).set(obj);
-      if(kind==='meta') await db.collection('car-expense').doc(uu).set({meta:obj},{merge:true});
+      setSyncState('syncing');
+      const col = dataCol(uu);
+      if(kind==='record') await col.doc(KEY_RECORD_PREFIX+obj.id).set({value: obj});
+      if(kind==='issue') await col.doc(KEY_ISSUE_PREFIX+obj.id).set({value: obj});
+      if(kind==='meta') await col.doc(KEY_META).set({value: obj});
       setSyncState('ok');
     }catch(e){
-      console.error('push failed',e); setSyncState('pending');
+      console.error('push failed',e); setSyncState('error');
     }
   }
 
