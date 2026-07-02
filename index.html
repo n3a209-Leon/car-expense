@@ -589,12 +589,10 @@ function IntervalField({label,unit,value,onChange,dateValue,onDateChange,kmValue
     </div>}
   </div>;
 }
-function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport,onCleanupOld}){
+function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
   const [m,setM] = useState(meta);
   const [importMsg,setImportMsg] = useState('');
   const [importBusy,setImportBusy] = useState(false);
-  const [cleanupMsg,setCleanupMsg] = useState('');
-  const [cleanupBusy,setCleanupBusy] = useState(false);
   const fileRef = useRef(null);
   useEffect(()=>setM(meta),[meta]);
   function setR(key,patch){ setM(prev=>({...prev, reminders:{...prev.reminders, [key]:{...prev.reminders[key], ...patch}}})); }
@@ -625,13 +623,6 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport,onClea
       if(fileRef.current) fileRef.current.value='';
     };
     reader.readAsText(file);
-  }
-  async function handleCleanup(){
-    if(!confirm('確定要清除舊版 car-expense 雲端殘留資料嗎？這不會影響你目前看到的任何紀錄，此動作無法復原。')) return;
-    setCleanupBusy(true); setCleanupMsg('');
-    const res = await onCleanupOld();
-    setCleanupMsg(res.ok? `清除完成，共移除 ${res.count} 筆殘留資料` : ('清除失敗：'+res.msg));
-    setCleanupBusy(false);
   }
   return <div>
     <div className="section-title">車輛資訊</div>
@@ -670,12 +661,6 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport,onClea
       {importBusy? '匯入中…' : '匯入 JSON 備份'}
     </button>
     {importMsg && <div style={{fontSize:12,color:'var(--ink-dim)',marginTop:8,textAlign:'center'}}>{importMsg}</div>}
-
-    <div className="section-title">雲端清理</div>
-    <button className="btn btn-ghost" style={{width:'100%'}} disabled={cleanupBusy} onClick={handleCleanup}>
-      {cleanupBusy? '清除中…' : '清除舊版雲端殘留資料'}
-    </button>
-    {cleanupMsg && <div style={{fontSize:12,color:'var(--ink-dim)',marginTop:8,textAlign:'center'}}>{cleanupMsg}</div>}
 
     <div className="section-title">帳號</div>
     <button className="btn btn-danger" style={{width:'100%'}} onClick={onLogout}>登出</button>
@@ -972,25 +957,6 @@ function App(){
     }
   }
 
-  // 清掉一開始設計錯誤時留在舊路徑 car-expense/{uid}/... 的殘留資料。
-  // App 本身早就不會再讀這個路徑，這個函式純粹是幫使用者眼不見為淨。
-  async function cleanupOldPath(){
-    const uu = auth.currentUser && auth.currentUser.uid;
-    if(!uu) return {ok:false, msg:'尚未登入'};
-    try{
-      const old = db.collection('car-expense').doc(uu);
-      const recSnap = await old.collection('records').get();
-      for(const d of recSnap.docs) await d.ref.delete();
-      const issueSnap = await old.collection('issues').get();
-      for(const d of issueSnap.docs) await d.ref.delete();
-      await old.delete();
-      return {ok:true, count: recSnap.size + issueSnap.size};
-    }catch(e){
-      console.error('cleanup failed', e);
-      return {ok:false, msg: e.message||'清除失敗'};
-    }
-  }
-
   async function handleSaveRecord(data){
     const now = Date.now();
     const full = {...data, id: data.id || uid(), updatedAt: now, deleted:false};
@@ -1064,7 +1030,7 @@ function App(){
         onAddFollowup={i=>setFollowupTarget(i)}
         onToggleStatus={toggleIssueStatus}/>}
       {tab==='stats' && <StatsScreen records={records}/>}
-      {tab==='settings' && <SettingsScreen meta={meta} onSaveMeta={saveMeta} onLogout={()=>auth.signOut()} records={records} issues={issues} onImport={importBackup} onCleanupOld={cleanupOldPath}/>}
+      {tab==='settings' && <SettingsScreen meta={meta} onSaveMeta={saveMeta} onLogout={()=>auth.signOut()} records={records} issues={issues} onImport={importBackup}/>}
     </div>
 
     {tab!=='settings' && <button className="fab" onClick={()=>{ setEditingRecord(null); setAddPrefill(null); setShowAdd(true); }}>+</button>}
