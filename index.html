@@ -593,6 +593,8 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
   const [m,setM] = useState(meta);
   const [importMsg,setImportMsg] = useState('');
   const [importBusy,setImportBusy] = useState(false);
+  const [pasteText,setPasteText] = useState('');
+  const [pasteBusy,setPasteBusy] = useState(false);
   const fileRef = useRef(null);
   useEffect(()=>setM(meta),[meta]);
   function setR(key,patch){ setM(prev=>({...prev, reminders:{...prev.reminders, [key]:{...prev.reminders[key], ...patch}}})); }
@@ -623,6 +625,20 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
       if(fileRef.current) fileRef.current.value='';
     };
     reader.readAsText(file);
+  }
+  async function handlePasteImport(){
+    if(!pasteText.trim()){ setImportMsg('請先貼上 JSON 內容'); return; }
+    setPasteBusy(true); setImportMsg('');
+    try{
+      const data = JSON.parse(pasteText);
+      const n = (data.records||[]).length, ni = (data.issues||[]).length;
+      await onImport(data);
+      setImportMsg(`匯入完成：新增/更新 ${n} 筆紀錄、${ni} 筆事件`);
+      setPasteText('');
+    }catch(err){
+      setImportMsg('匯入失敗：'+(err.message||'JSON 格式錯誤，請確認完整複製貼上'));
+    }
+    setPasteBusy(false);
   }
   return <div>
     <div className="section-title">車輛資訊</div>
@@ -658,7 +674,16 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
     <div className="section-title">匯入資料</div>
     <input ref={fileRef} type="file" accept="application/json" style={{display:'none'}} onChange={handleFile}/>
     <button className="btn btn-ghost" style={{width:'100%'}} disabled={importBusy} onClick={()=>fileRef.current&&fileRef.current.click()}>
-      {importBusy? '匯入中…' : '匯入 JSON 備份'}
+      {importBusy? '匯入中…' : '匯入 JSON 檔案'}
+    </button>
+
+    <div className="field" style={{marginTop:14}}>
+      <label>或直接貼上 JSON 內容</label>
+      <textarea style={{minHeight:110,fontFamily:'var(--mono)',fontSize:12.5}} value={pasteText}
+        onChange={e=>setPasteText(e.target.value)} placeholder='{"records":[...],"issues":[...]}'/>
+    </div>
+    <button className="btn btn-ghost" style={{width:'100%'}} disabled={pasteBusy} onClick={handlePasteImport}>
+      {pasteBusy? '匯入中…' : '貼上並匯入'}
     </button>
     {importMsg && <div style={{fontSize:12,color:'var(--ink-dim)',marginTop:8,textAlign:'center'}}>{importMsg}</div>}
 
@@ -668,6 +693,8 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
 }
 
 /* ============ MODALS ============ */
+const FIXED_AMOUNTS = { tax_license: 11230, tax_fuel: 6180, inspection: 450 };
+
 function AddModal({initial,onSave,onDelete,onClose}){
   const [category,setCategory] = useState((initial&&initial.category)||'fuel');
   const [date,setDate] = useState((initial&&initial.date)||todayStr());
@@ -675,6 +702,14 @@ function AddModal({initial,onSave,onDelete,onClose}){
   const [mileage,setMileage] = useState(initial&&initial.mileage!=null? String(initial.mileage) : '');
   const [note,setNote] = useState((initial&&initial.note)||'');
   const [excludeFromStats,setExcludeFromStats] = useState(!!(initial&&initial.excludeFromStats));
+  function pickCategory(cid){
+    setCategory(cid);
+    // 只在「新增」且金額還沒填的時候才自動帶入固定金額，
+    // 編輯既有紀錄或使用者已經自己填過金額時，絕不覆蓋。
+    if(!(initial&&initial.id) && (amount===''||amount==='0') && FIXED_AMOUNTS[cid]!=null){
+      setAmount(String(FIXED_AMOUNTS[cid]));
+    }
+  }
   function submit(){
     onSave({
       id: initial&&initial.id? initial.id : undefined,
@@ -694,7 +729,7 @@ function AddModal({initial,onSave,onDelete,onClose}){
       </div>
       <div className="cat-grid">
         {CATEGORIES.map(c=>
-          <div key={c.id} className={"cat-btn"+(category===c.id?' active':'')} onClick={()=>setCategory(c.id)}>
+          <div key={c.id} className={"cat-btn"+(category===c.id?' active':'')} onClick={()=>pickCategory(c.id)}>
             <span className="em">{c.icon}</span>{c.name}
           </div>
         )}
