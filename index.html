@@ -573,8 +573,11 @@ function IntervalField({label,unit,value,onChange,dateValue,onDateChange,kmValue
     </div>}
   </div>;
 }
-function SettingsScreen({meta,onSaveMeta,onLogout,records,issues}){
+function SettingsScreen({meta,onSaveMeta,onLogout,records,issues,onImport}){
   const [m,setM] = useState(meta);
+  const [importMsg,setImportMsg] = useState('');
+  const [importBusy,setImportBusy] = useState(false);
+  const fileRef = useRef(null);
   useEffect(()=>setM(meta),[meta]);
   function setR(key,patch){ setM(prev=>({...prev, reminders:{...prev.reminders, [key]:{...prev.reminders[key], ...patch}}})); }
   function exportData(){
@@ -585,6 +588,25 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues}){
     a.href = url; a.download = 'moko-backup-'+todayStr()+'.json';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+  function handleFile(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    setImportBusy(true); setImportMsg('');
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        const n = (data.records||[]).length, ni = (data.issues||[]).length;
+        await onImport(data);
+        setImportMsg(`匯入完成：新增/更新 ${n} 筆紀錄、${ni} 筆事件`);
+      }catch(err){
+        setImportMsg('匯入失敗：'+(err.message||'檔案格式錯誤'));
+      }
+      setImportBusy(false);
+      if(fileRef.current) fileRef.current.value='';
+    };
+    reader.readAsText(file);
   }
   return <div>
     <div className="section-title">車輛資訊</div>
@@ -616,6 +638,13 @@ function SettingsScreen({meta,onSaveMeta,onLogout,records,issues}){
 
     <div className="section-title">資料備份</div>
     <button className="btn btn-ghost" style={{width:'100%'}} onClick={exportData}>匯出 JSON 備份</button>
+
+    <div className="section-title">匯入資料</div>
+    <input ref={fileRef} type="file" accept="application/json" style={{display:'none'}} onChange={handleFile}/>
+    <button className="btn btn-ghost" style={{width:'100%'}} disabled={importBusy} onClick={()=>fileRef.current&&fileRef.current.click()}>
+      {importBusy? '匯入中…' : '匯入 JSON 備份'}
+    </button>
+    {importMsg && <div style={{fontSize:12,color:'var(--ink-dim)',marginTop:8,textAlign:'center'}}>{importMsg}</div>}
 
     <div className="section-title">帳號</div>
     <button className="btn btn-danger" style={{width:'100%'}} onClick={onLogout}>登出</button>
@@ -834,6 +863,33 @@ function App(){
     pushToFirestore('meta', stamped);
   }
 
+  async function importBackup(data){
+    const now = Date.now();
+    const incomingRecords = (data.records||[]).map(r=>({...r, updatedAt: r.updatedAt||now, deleted: !!r.deleted}));
+    const incomingIssues = (data.issues||[]).map(i=>({...i, updatedAt: i.updatedAt||now, deleted: !!i.deleted, followups: i.followups||[]}));
+
+    const mergedRecords = mergeByUpdatedAt(records, incomingRecords);
+    const mergedIssues = mergeByUpdatedAt(issues, incomingIssues);
+    const mergedMeta = data.meta ? {...data.meta, updatedAt: now} : meta;
+
+    for(const r of mergedRecords) await idbPut('records', r);
+    for(const i of mergedIssues) await idbPut('issues', i);
+    await idbPut('meta', {key:'main', ...mergedMeta});
+    safeSet('moko:records', JSON.stringify(mergedRecords));
+    safeSet('moko:issues', JSON.stringify(mergedIssues));
+    safeSet('moko:meta', JSON.stringify(mergedMeta));
+
+    setRecords(mergedRecords.slice().sort(byDateDesc));
+    setIssues(mergedIssues.slice().sort(byDateDesc));
+    setMeta(mergedMeta);
+
+    if(navigator.onLine){
+      for(const r of incomingRecords) pushToFirestore('record', r);
+      for(const i of incomingIssues) pushToFirestore('issue', i);
+      pushToFirestore('meta', mergedMeta);
+    }
+  }
+
   async function handleSaveRecord(data){
     const now = Date.now();
     const full = {...data, id: data.id || uid(), updatedAt: now, deleted:false};
@@ -907,7 +963,7 @@ function App(){
         onAddFollowup={i=>setFollowupTarget(i)}
         onToggleStatus={toggleIssueStatus}/>}
       {tab==='stats' && <StatsScreen records={records}/>}
-      {tab==='settings' && <SettingsScreen meta={meta} onSaveMeta={saveMeta} onLogout={()=>auth.signOut()} records={records} issues={issues}/>}
+      {tab==='settings' && <SettingsScreen meta={meta} onSaveMeta={saveMeta} onLogout={()=>auth.signOut()} records={records} issues={issues} onImport={importBackup}/>}
     </div>
 
     {tab!=='settings' && <button className="fab" onClick={()=>{ setEditingRecord(null); setAddPrefill(null); setShowAdd(true); }}>+</button>}
