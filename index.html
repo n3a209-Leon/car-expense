@@ -745,7 +745,8 @@ function AddModal({initial,onSave,onDelete,onClose}){
         <div>不計入統計報表（例如購車款等一次性大額支出）</div>
       </div>
       <button className="btn btn-primary" style={{width:'100%'}} onClick={submit}>儲存</button>
-      {initial&&initial.id && <button className="btn btn-danger" style={{width:'100%',marginTop:10}} onClick={()=>onDelete(initial)}>刪除這筆紀錄</button>}
+      {initial&&initial.id && <button className="btn btn-danger" style={{width:'100%',marginTop:10}}
+        onClick={()=>{ if(confirm('確定要刪除這筆紀錄嗎？此動作無法復原。')) onDelete(initial); }}>刪除這筆紀錄</button>}
       <button className="btn btn-ghost" style={{width:'100%',marginTop:10}} onClick={onClose}>取消</button>
     </div>
   </div>;
