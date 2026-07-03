@@ -538,6 +538,7 @@ function StatsScreen({records}){
   const barChart = useRef(null), catChart = useRef(null);
   const valid = records.filter(r=>!r.deleted && !r.excludeFromStats);
   const excludedTotal = records.filter(r=>!r.deleted && r.excludeFromStats).reduce((s,r)=>s+(r.amount||0),0);
+  const totalSpent = valid.reduce((s,r)=>s+(r.amount||0),0);
   const byYear = {}; valid.forEach(r=>{ const y=(r.date||'').slice(0,4)||'—'; byYear[y]=(byYear[y]||0)+(r.amount||0); });
   const years = Object.keys(byYear).sort();
   const byCat = {}; valid.forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+(r.amount||0); });
@@ -574,9 +575,14 @@ function StatsScreen({records}){
   },[JSON.stringify(byCat)]);
 
   return <div>
-    {excludedTotal>0 && <div style={{fontSize:11.5,color:'var(--ink-dim)',marginBottom:14,textAlign:'center'}}>
-      不含已排除項目（如購車款）${fmtNum(excludedTotal)}
-    </div>}
+    <div className="odo-wrap" style={{marginBottom:16}}>
+      <div className="odo-label">總支出（統計採計範圍）</div>
+      <div className="odo-value">${fmtNum(totalSpent)}</div>
+      <div className="odo-sub">
+        <span>共 <b>{valid.length}</b> 筆</span>
+        {excludedTotal>0 && <span>不含已排除 <b>${fmtNum(excludedTotal)}</b></span>}
+      </div>
+    </div>
     <div className="section-title">年度支出</div>
     <div className="stat-box"><canvas ref={barRef} height="180"></canvas></div>
     <div className="section-title">類別佔比</div>
