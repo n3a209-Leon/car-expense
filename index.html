@@ -372,6 +372,34 @@ function applyRecordToMeta(meta, rec){
   return {...meta, currentMileage, reminders:R, updatedAt: Date.now()};
 }
 
+// 匯入整批紀錄時用：掃描全部紀錄，找出每個提醒類別「日期最新」的一筆，
+// 用它校正提醒設定，而不是只看匯入順序中隨便一筆。單筆新增用 applyRecordToMeta 就好，
+// 這個函式只在匯入(JSON 檔案/貼上)流程呼叫。
+function deriveMetaFromRecords(records, baseMeta){
+  const m = {...baseMeta, reminders: {...baseMeta.reminders}};
+  const valid = records.filter(r=>!r.deleted);
+  function latestOf(cat){
+    return valid.filter(r=>r.category===cat && r.date)
+      .sort((a,b)=>b.date.localeCompare(a.date))[0];
+  }
+  const lt = latestOf('tax_license');
+  if(lt) m.reminders.licenseTax = {...m.reminders.licenseTax, lastDate: lt.date};
+  const ft = latestOf('tax_fuel');
+  if(ft) m.reminders.fuelTax = {...m.reminders.fuelTax, lastDate: ft.date};
+  const insp = latestOf('inspection');
+  if(insp) m.reminders.inspection = {...m.reminders.inspection, lastDate: insp.date};
+  const maint = latestOf('maintenance');
+  if(maint) m.reminders.maintenance = {...m.reminders.maintenance, lastDate: maint.date,
+    lastMileage: maint.mileage!=null? maint.mileage : m.reminders.maintenance.lastMileage};
+  const tire = latestOf('tire');
+  if(tire) m.reminders.tireRotation = {...m.reminders.tireRotation, lastDate: tire.date,
+    lastMileage: tire.mileage!=null? tire.mileage : m.reminders.tireRotation.lastMileage};
+  const maxMileage = valid.reduce((mx,r)=> (r.mileage!=null && r.mileage>mx)? r.mileage : mx, m.currentMileage||0);
+  m.currentMileage = maxMileage;
+  m.updatedAt = Date.now();
+  return m;
+}
+
 /* ============ SMALL UI PIECES ============ */
 function TabBtn({icon,label,active,onClick}){
   return <div className={"tab"+(active?' active':'')} onClick={onClick}>
@@ -997,7 +1025,10 @@ function App(){
 
     const mergedRecords = mergeByUpdatedAt(records, incomingRecords);
     const mergedIssues = mergeByUpdatedAt(issues, incomingIssues);
-    const mergedMeta = data.meta ? {...data.meta, updatedAt: now} : meta;
+    const baseMeta = data.meta ? {...data.meta, updatedAt: now} : meta;
+    // 匯入完成後，重新用「全部紀錄」校正一次提醒設定，
+    // 避免提醒日期停留在匯入前的舊資料（例如已經驗車/保養過卻還顯示逾期）。
+    const mergedMeta = deriveMetaFromRecords(mergedRecords, baseMeta);
 
     for(const r of mergedRecords) await idbPut('records', r);
     for(const i of mergedIssues) await idbPut('issues', i);
